@@ -161,11 +161,13 @@ public class GetTestDataMethodObject {
                 // Add a newline so that we detect attachments if stdout has no trailing newline
                 // and stderr is null (as otherwise we'd try and parse "[[ATTACHMENT|foo]]null")
                 findAttachmentsInOutput(cr.getClassName(), cr.getName(), caseStdout + "\n" + caseStderr);
+                findAttachmentsInProperties(cr.getClassName(), cr.getName(), cr.getProperties());
             }
 
             // Capture stdout and stderr for the testsuite as a whole, if they exist
             findAttachmentsInOutput(suiteResult.getName(), null, suiteStdout);
             findAttachmentsInOutput(suiteResult.getName(), null, suiteStderr);
+            findAttachmentsInProperties(suiteResult.getName(), null, suiteResult.getProperties());
         }
         return reports;
     }
@@ -215,6 +217,28 @@ public class GetTestDataMethodObject {
         LOG.fine("stdInAndOut: " + stdInAndOut.absolutize());
         if (stdInAndOut.exists()) {
             captureAttachment(className, stdInAndOut);
+        }
+    }
+
+    private void findAttachmentsInProperties(String className, String testName, Map<String,String> props) throws IOException, InterruptedException {
+        for (String key : props.keySet()) {
+            if (!key.startsWith("attachment"))
+                continue;
+            String val = props.get(key);
+            if (val == null)
+                continue;
+            String[] fileNames = val.split("\r?\n|\r|;");
+
+            for (String fileName : fileNames) {
+                FilePath src = workspace.child(fileName); // even though we use child(), this should be absolute
+                if (src.isDirectory()) {
+                    listener.getLogger().println("Attachment " + fileName + " was referenced in properties from the test '" + className + "' but it is a directory, not a file. Skipping.");
+                } else if (src.exists()) {
+                    captureAttachment(className, testName, src);
+                } else {
+                    listener.getLogger().println("Attachment "+fileName+" was referenced in properties from the test '"+className+"' but it doesn't exist. Skipping.");
+                }
+            }
         }
     }
 
